@@ -1,0 +1,11 @@
+services:
+  postgres:
+    image: postgres
+    environment:
+      - POSTGRES_PASSWORD=postgrespw
+    ports:
+      - 5432:5432 # means that we access postgres from outside of docker on that port, and from the inside of docker from the same port
+    volumes:
+      - pgdata:/var/lib/postgresql/data #allows docker to use external storage to docker; our OS to store the data for our database
+volumes: 
+  pgdata:
