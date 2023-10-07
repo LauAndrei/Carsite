@@ -7,5 +7,16 @@ services:
       - 5432:5432 # means that we access postgres from outside of docker on that port, and from the inside of docker from the same port
     volumes:
       - pgdata:/var/lib/postgresql/data #allows docker to use external storage to docker; our OS to store the data for our database
-volumes: 
-  pgdata:
+  mongodb:
+    image: mongo
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=mongopw
+    ports:
+      - 27017:27017 #first for access via docker, second for internal
+    volumes: #because it is a database and we want to persist our data
+      - mongodata:/var/lib/mongodb/data #named volume
+volumes: # 
+  pgdata: # we effectively specified the named volume here so when we run docker compose, then inside docker it
+          # effectively creates a volume where it reserves some space on our OS
+  mongodata:
