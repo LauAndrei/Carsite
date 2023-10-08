@@ -18,7 +18,7 @@ public class AuctionServiceHttpClient
     {
         // this is gonna give us the date of the auction that's been updated the latest in our db
         var lastUpdated = await DB.Find<Item, string>()
-            .Sort(x => x.Descending(x => x.UpdatedAt))
+            .Sort(x => x.Descending(item => item.UpdatedAt))
             .Project(x => x.UpdatedAt.ToString())
             .ExecuteFirstAsync();
 

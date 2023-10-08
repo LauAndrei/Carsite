@@ -3,6 +3,8 @@ using AuctionService.DTOs;
 using AuctionService.Entities;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
+using Contracts;
+using MassTransit;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,11 +16,13 @@ public class AuctionController : ControllerBase
 {
     private readonly AuctionDbContext _context;
     private readonly IMapper _mapper;
+    private readonly IPublishEndpoint _publishEndpoint;
 
-    public AuctionController(AuctionDbContext context, IMapper mapper)
+    public AuctionController(AuctionDbContext context, IMapper mapper, IPublishEndpoint publishEndpoint)
     {
         _context = context;
         _mapper = mapper;
+        _publishEndpoint = publishEndpoint;
     }
 
     [HttpGet]
@@ -57,11 +61,19 @@ public class AuctionController : ControllerBase
 
         await _context.Auctions.AddAsync(auction);
 
+        var newAuction = _mapper.Map<AuctionDto>(auction);
+
+        await _publishEndpoint.Publish(_mapper.Map<AuctionCreated>(newAuction));
+
+        // now these, (the upper 3 lines of code) are going to be treated like a transaction, and either they
+        // all work, or none of them work. Because we're using entity framework, now publish method is part of the
+        // same transaction that we're saving to the db down below
+
         var result = await _context.SaveChangesAsync() > 0;
 
         if (!result) return BadRequest("Could not save changes to db");
 
-        return CreatedAtAction(nameof(GetAuctionById), new { auction.Id }, _mapper.Map<AuctionDto>(auction));
+        return CreatedAtAction(nameof(GetAuctionById), new { auction.Id }, newAuction);
     }
 
     [HttpPut("{id:guid}")]
@@ -81,6 +93,10 @@ public class AuctionController : ControllerBase
         auction.Item.Mileage = request.Mileage ?? auction.Item.Mileage;
         auction.Item.Year = request.Year ?? auction.Item.Year;
 
+        // is before saveChanges so if our service bus was down, then this would still work and it would
+        // save that message into the outbox in our database and when it comes back up it would be published
+        await _publishEndpoint.Publish(_mapper.Map<AuctionUpdated>(auction));
+
         var result = await _context.SaveChangesAsync() > 0;
 
         if (!result) return BadRequest("Problem saving changes");
@@ -98,6 +114,8 @@ public class AuctionController : ControllerBase
         //TODO: check seller == username
 
         _context.Auctions.Remove(auction);
+
+        await _publishEndpoint.Publish<AuctionDeleted>(new { Id = auction.Id.ToString() });
 
         var result = await _context.SaveChangesAsync() > 0;
 

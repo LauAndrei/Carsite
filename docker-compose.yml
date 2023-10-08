@@ -6,7 +6,8 @@ services:
     ports:
       - 5432:5432 # means that we access postgres from outside of docker on that port, and from the inside of docker from the same port
     volumes:
-      - pgdata:/var/lib/postgresql/data #allows docker to use external storage to docker; our OS to store the data for our database
+      #- pgdata:/var/lib/postgresql/data #allows docker to use external storage to docker; our OS to store the data for our database
+      - /var/lib/postgresql/data #this is unnamed volume
   mongodb:
     image: mongo
     environment:
@@ -15,8 +16,17 @@ services:
     ports:
       - 27017:27017 #first for access via docker, second for internal
     volumes: #because it is a database and we want to persist our data
-      - mongodata:/var/lib/mongodb/data #named volume
-volumes: # 
-  pgdata: # we effectively specified the named volume here so when we run docker compose, then inside docker it
-          # effectively creates a volume where it reserves some space on our OS
-  mongodata:
+      #- mongodata:/var/lib/mongodb/data #named volume
+      - /var/lib/mongodb/data #unnamed volume
+  rabbitmq:
+    image: rabbitmq:3-management-alpine # this image comes with two things: 1) message broker itself 
+                    # 2) management utility so we can see what's going on inside the broker 
+    ports: 
+      - 5672:5672
+      - 15672:15672 # this additional port is so we can access the management service which we can also access in a browser 
+                   # for RabbitMq as well
+#volumes: # 
+#  pgdata: # we effectively specified the named volume here so when we run docker compose, then inside docker it
+#          # effectively creates a volume where it reserves some space on our OS. If we use named volumes and then
+           # write this, the data in our database will be persisted even when we drop the db
+#  mongodata:
