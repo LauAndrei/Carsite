@@ -22,7 +22,10 @@ public class AuctionCreatedConsumer : IConsumer<AuctionCreated>
         var item = _mapper.Map<Item>(context.Message);
 
         // example of handling faults in our consumer
-        if (item.Model == "Foo") throw new ArgumentException("Cannot sell cars with name of Foo");
+        if (item.Model == "Foo")
+        {
+            throw new ArgumentException("Cannot sell cars with name of Foo");
+        }
 
         await item.SaveAsync();
     }

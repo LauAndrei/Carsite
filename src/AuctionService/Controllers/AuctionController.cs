@@ -5,6 +5,7 @@ using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using Contracts;
 using MassTransit;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -31,8 +32,10 @@ public class AuctionController : ControllerBase
         var query = _context.Auctions.OrderBy(x => x.Item.Make).AsQueryable();
 
         if (!string.IsNullOrEmpty(date))
+        {
             query = query.Where(x => x.UpdatedAt
                 .CompareTo(DateTime.Parse(date).ToUniversalTime()) > 0);
+        }
 
         return await query.ProjectTo<AuctionDto>(_mapper.ConfigurationProvider).ToListAsync();
     }
@@ -46,18 +49,22 @@ public class AuctionController : ControllerBase
             .Select(a => _mapper.Map<AuctionDto>(a))
             .FirstOrDefaultAsync();
 
-        if (auction is null) return NotFound();
+        if (auction is null)
+        {
+            return NotFound();
+        }
 
         return auction;
     }
 
+    [Authorize]
     [HttpPost]
     public async Task<ActionResult<AuctionDto>> CreateAuction([FromBody] CreateAuctionDto request)
     {
         var auction = _mapper.Map<Auction>(request);
 
-        // TODO: Add current user as seller
-        auction.Seller = "Test";
+        auction.Seller = User.Identity.Name; // When we specified the NameClaimType in the program.cs as username,
+        // that means that User.Identity.Name is gonna give us the username
 
         await _context.Auctions.AddAsync(auction);
 
@@ -71,11 +78,15 @@ public class AuctionController : ControllerBase
 
         var result = await _context.SaveChangesAsync() > 0;
 
-        if (!result) return BadRequest("Could not save changes to db");
+        if (!result)
+        {
+            return BadRequest("Could not save changes to db");
+        }
 
         return CreatedAtAction(nameof(GetAuctionById), new { auction.Id }, newAuction);
     }
 
+    [Authorize]
     [HttpPut("{id:guid}")]
     public async Task<ActionResult> UpdateAuction(Guid id, UpdateAuctionDto request)
     {
@@ -83,9 +94,15 @@ public class AuctionController : ControllerBase
             .Include(x => x.Item)
             .FirstOrDefaultAsync(a => a.Id == id);
 
-        if (auction is null) return NotFound();
+        if (auction is null)
+        {
+            return NotFound();
+        }
 
-        // TODO: check seller name matches owner name
+        if (auction.Seller != User.Identity.Name)
+        {
+            return Forbid();
+        }
 
         auction.Item.Make = request.Make ?? auction.Item.Make;
         auction.Item.Model = request.Model ?? auction.Item.Model;
@@ -99,7 +116,10 @@ public class AuctionController : ControllerBase
 
         var result = await _context.SaveChangesAsync() > 0;
 
-        if (!result) return BadRequest("Problem saving changes");
+        if (!result)
+        {
+            return BadRequest("Problem saving changes");
+        }
 
         return Ok();
     }
@@ -109,9 +129,15 @@ public class AuctionController : ControllerBase
     {
         var auction = await _context.Auctions.FindAsync(id);
 
-        if (auction is null) return NotFound();
+        if (auction is null)
+        {
+            return NotFound();
+        }
 
-        //TODO: check seller == username
+        if (auction.Seller != User.Identity.Name)
+        {
+            return Forbid();
+        }
 
         _context.Auctions.Remove(auction);
 
@@ -119,7 +145,10 @@ public class AuctionController : ControllerBase
 
         var result = await _context.SaveChangesAsync() > 0;
 
-        if (!result) return BadRequest("Could not delete");
+        if (!result)
+        {
+            return BadRequest("Could not delete");
+        }
 
         return Ok();
     }
