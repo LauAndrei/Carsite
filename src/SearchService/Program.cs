@@ -22,6 +22,14 @@ builder.Services.AddMassTransit(config =>
 
     config.UsingRabbitMq((context, cfg) =>
     {
+        cfg.Host(builder.Configuration["RabbitMq:Host"], "/",
+            host =>
+            {
+                // we're getting these configuration from RabbitMq section inside our configuration files
+                host.Username(builder.Configuration.GetValue("RabbitMQ:Username", "guest"));
+                host.Password(builder.Configuration.GetValue("RabbitMq:Password", "guest"));
+            });
+
         cfg.ReceiveEndpoint("search-auction-created", e =>
         {
             // we gonna try 5 times, and wait 5 seconds between each interval

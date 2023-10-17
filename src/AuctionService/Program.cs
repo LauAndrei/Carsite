@@ -30,7 +30,18 @@ builder.Services.AddMassTransit(config =>
 
     config.SetEndpointNameFormatter(new KebabCaseEndpointNameFormatter("auction", false));
 
-    config.UsingRabbitMq((context, cfg) => { cfg.ConfigureEndpoints(context); });
+    config.UsingRabbitMq((context, cfg) =>
+    {
+        cfg.Host(builder.Configuration["RabbitMq:Host"], "/",
+            host =>
+            {
+                // we're getting these configuration from RabbitMq section inside our configuration files
+                host.Username(builder.Configuration.GetValue("RabbitMQ:Username", "guest"));
+                host.Password(builder.Configuration.GetValue("RabbitMq:Password", "guest"));
+            });
+
+        cfg.ConfigureEndpoints(context);
+    });
 });
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

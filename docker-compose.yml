@@ -30,3 +30,75 @@ services:
 #          # effectively creates a volume where it reserves some space on our OS. If we use named volumes and then
            # write this, the data in our database will be persisted even when we drop the db
 #  mongodata:
+  auction-svc:
+    # :latest is a tag; when we build this image, this is the tag that it's going to be given
+    image: lauandrei/auction-svc:latest
+    build:
+      context: . #this is the root of our directory (Carsite directory)
+      dockerfile: src/AuctionService/Dockerfile
+    environment: # these are going to override whatever is inside our appsettings.json or appsettings.development.json
+      # so it needs to match at least the ones we've defined here (from RabbitMq down below) exactly what's going on inside
+      # our appsettings.development.json, but we swap the things for local host to the actual name of the service which
+      # is specified in the docker-compose file
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80 # we'll access it using a different port, but internally this is how it's gonna run
+      - RabbitMq__Host=rabbitmq # we need to use __ instead of that : to get the same config as in appsettings
+                                # and then specify the name of the service (is defined above) as that address,
+      # so we just specify rabbitmq which matches the name of the container that's running inside docker
+      - ConnectionStrings__DefaultConnection=Server=postgres:5432;User Id=postgres;Password=postgrespw;Database=auctions
+      # this(above) mostly stays the same, but instead of localhost we're gonna change that to the name of the service
+      # we've used for postgres
+      - IdentityServiceUrl=http://identity-svc
+    ports:
+      - 7001:80 #external 7001, internal 80. Each one of these services is given their own IP address by docker, so we
+      # can have multiple services running on the same port because they're all going to have their own IP address that's
+      # assigned by Docker
+    depends_on: # this service (the AuctionService) it depends on services that we want to wait to start, like rabbitmq or postgres
+      - postgres
+      - rabbitmq
+  
+  search-svc:
+    image: lauandrei/search-svc:latest
+    build:
+      context: .
+      dockerfile: src/SearchService/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - RabbitMq__Host=rabbitmq
+      - ConnectionStrings__MongoDbConnection=mongodb://root:mongopw@mongodb # mongodb after the @ it's gonna match 
+      # the name of our mongodb service defined above so this is what we have to specify instead of @localhost
+      - AuctionServiceUrl=http://auction-svc #auction-svc it's gonna match the name of auction service defined above
+    ports:
+      - 7002:80 
+    depends_on:
+      - mongodb
+      - rabbitmq
+      # we could have added the auctionService as well but we've got our resilient http connection, it's gonna make to our
+      # auctionService anyway when our searchService starts up so we don't need to worry about whether or not this one is
+      # already running before we attempt to start this service
+  
+  identity-svc:
+    image: lauandrei/identity-svc:latest
+    build:
+      context: .
+      dockerfile: src/IdentityService/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Docker
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__DefaultConnection=Server=postgres:5432;User Id=postgres;Password=postgrespw;Database=identity 
+    ports:
+      - 5000:80
+    depends_on:
+      - postgres
+  
+  gateway-svc:
+    image: lauandrei/gateway-svc:latest
+    build:
+      context: .
+      dockerfile: src/GatewayService/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Docker # change into docker so that it reads from appsettings.Docker.json
+      - ASPNETCORE_URLS=http://+:80
+    ports:
+      - 6001:80
